@@ -1,47 +1,114 @@
 'use client';
-import { Note, NoteID } from '../types';
+import Dexie, { Table } from 'dexie';
+import type { Note, ImageData } from '../types';
 
-const KEY = 'portable-notes:v1';
+class PortableNotesDB extends Dexie {
+  notes!: Table<Note, string>;
+  images!: Table<ImageData, number>;
 
-function loadAll(): Note[] {
-  try {
-    return JSON.parse(localStorage.getItem(KEY) || '[]') as Note[];
-  } catch {
-    return [];
+  constructor() {
+    super('PortableNotesDB');
+    this.version(1).stores({
+      notes: 'id, updatedAt',
+      images: '++id, noteId, createdAt',
+    });
   }
 }
-function saveAll(notes: Note[]) {
-  localStorage.setItem(KEY, JSON.stringify(notes));
+export const db = new PortableNotesDB();
+
+function blobToBase64(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result as string);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
+function base64ToBlob(base64: string): Blob {
+  const arr = base64.split(',');
+  const mime = arr[0].match(/:(.*?);/)?.[1] || '';
+  const bstr = atob(arr[1]);
+  const u8arr = new Uint8Array(bstr.length);
+  for (let i = 0; i < bstr.length; i++) u8arr[i] = bstr.charCodeAt(i);
+  return new Blob([u8arr], { type: mime });
 }
 
 export const storage = {
-  list(): Note[] {
-    return loadAll().sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  async list(): Promise<Note[]> {
+    return db.notes.orderBy('updatedAt').reverse().toArray();
   },
-  create(): Note {
+
+  async create(): Promise<Note> {
     const now = new Date().toISOString();
-    const n: Note = { id: `n_${Date.now()}`, title: '', content: '', createdAt: now, updatedAt: now };
-    const all = loadAll();
-    all.push(n);
-    saveAll(all);
-    return n;
+    const note: Note = {
+      id: `n_${Date.now()}`,
+      title: '',
+      content: '',
+      createdAt: now,
+      updatedAt: now,
+    };
+    await db.notes.add(note);
+    return note;
   },
-  update(id: NoteID, patch: Partial<Note>): Note | undefined {
-    const all = loadAll();
-    const i = all.findIndex(n => n.id === id);
-    if (i === -1) return;
-    const updated = { ...all[i], ...patch, updatedAt: new Date().toISOString() };
-    all[i] = updated;
-    saveAll(all);
+
+  async update(id: string, patch: Partial<Note>): Promise<Note | undefined> {
+    const note = await db.notes.get(id);
+    if (!note) return;
+    const updated = { ...note, ...patch, updatedAt: new Date().toISOString() };
+    await db.notes.put(updated);
     return updated;
   },
-  remove(id: NoteID) {
-    saveAll(loadAll().filter(n => n.id !== id));
+
+  async remove(id: string) {
+    await db.transaction('rw', db.notes, db.images, async () => {
+      await db.images.where('noteId').equals(id).delete();
+      await db.notes.delete(id);
+    });
   },
-  export(): string {
-    return JSON.stringify(loadAll(), null, 2);
+
+  async export(): Promise<string> {
+    const notes = await db.notes.toArray();
+    const images = await db.images.toArray();
+    const imageData = await Promise.all(
+      images.map(async (img) => ({
+        ...img,
+        data: await blobToBase64(img.data),
+      })),
+    );
+    return JSON.stringify({ notes, images: imageData }, null, 2);
   },
-  import(json: string) {
-    saveAll(JSON.parse(json) as Note[]);
+
+  async import(json: string) {
+    const { notes, images } = JSON.parse(json);
+    await db.transaction('rw', db.notes, db.images, async () => {
+      await db.notes.clear();
+      await db.images.clear();
+      await db.notes.bulkAdd(notes);
+      for (const img of images) {
+        const blob = base64ToBlob(img.data);
+        await db.images.add({ ...img, data: blob });
+      }
+    });
+  },
+
+  async addImage(noteId: string, file: File): Promise<ImageData> {
+    const data = await file.arrayBuffer();
+    const blob = new Blob([data], { type: file.type });
+    const image: ImageData = {
+      noteId,
+      name: file.name,
+      data: blob,
+      createdAt: new Date().toISOString(),
+    };
+    image.id = await db.images.add(image);
+    return image;
+  },
+
+  async listImages(noteId: string): Promise<ImageData[]> {
+    return db.images.where('noteId').equals(noteId).toArray();
+  },
+
+  async removeImage(id: number) {
+    await db.images.delete(id);
   },
 };

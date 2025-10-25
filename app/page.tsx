@@ -1,78 +1,147 @@
 'use client';
 import { useEffect, useMemo, useState } from 'react';
+import { storage } from './lib/storage';
+import type { Note, ImageData } from './types';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
-import 'highlight.js/styles/github-dark.css'; // style de code blocks
-import { storage } from './lib/storage';
-import { Note } from './types';
+import 'highlight.js/styles/github-dark.css';
 
 export default function Page() {
   const [notes, setNotes] = useState<Note[]>([]);
   const [active, setActive] = useState<Note | null>(null);
+  const [draft, setDraft] = useState<Note | null>(null);
+  const [images, setImages] = useState<ImageData[]>([]);
   const [preview, setPreview] = useState(false);
   const [search, setSearch] = useState('');
 
-  // Charger les notes au démarrage
+  /* === Charger les notes === */
   useEffect(() => {
-    const all = storage.list();
-    setNotes(all);
-    setActive(all[0] ?? null);
+    (async () => {
+      const all = await storage.list();
+      setNotes(all);
+      setActive(all[0] ?? null);
+    })();
   }, []);
 
-  const createNote = () => {
-    const n = storage.create();
-    setNotes(storage.list());
+
+/* === Charger le brouillon et les images === */
+useEffect(() => {
+  // On ne fait pas le setState directement
+  queueMicrotask(() => {
+    setDraft(active ? { ...active } : null);
+  });
+
+  let cancelled = false;
+  (async () => {
+    if (!active?.id) {
+      setImages([]);
+      return;
+    }
+    const imgs = await storage.listImages(active.id);
+    if (!cancelled) setImages(imgs);
+  })();
+
+  return () => {
+    cancelled = true;
+  };
+}, [active]);
+
+
+  /* === Autosave différée (brouillon → DB) === */
+  useEffect(() => {
+    if (!draft) return;
+    const t = setTimeout(async () => {
+      await storage.update(draft.id, {
+        title: draft.title,
+        content: draft.content,
+      });
+      const all = await storage.list();
+      setNotes(all);
+    }, 600);
+    return () => clearTimeout(t);
+  }, [draft]);
+
+  /* === Recherche === */
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return notes;
+    return notes.filter((n) =>
+      (n.title + ' ' + n.content).toLowerCase().includes(q),
+    );
+  }, [notes, search]);
+
+  /* === CRUD Notes === */
+  const createNote = async () => {
+    const n = await storage.create();
+    const all = await storage.list();
+    setNotes(all);
     setActive(n);
   };
 
-  const updateNote = (patch: Partial<Note>) => {
+  const deleteNote = async () => {
     if (!active) return;
-    const updated = storage.update(active.id, patch);
-    if (updated) {
-      setNotes(storage.list());
-      setActive(updated);
-    }
-  };
-
-  const deleteNote = () => {
-    if (!active) return;
-    storage.remove(active.id);
-    const all = storage.list();
+    await storage.remove(active.id);
+    const all = await storage.list();
     setNotes(all);
     setActive(all[0] ?? null);
   };
 
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    return q
-      ? notes.filter(n =>
-          (n.title + ' ' + n.content).toLowerCase().includes(q),
-        )
-      : notes;
-  }, [notes, search]);
+  /* === Images === */
+  const handleAddImage = async (file: File) => {
+    if (!active?.id) return;
+    await storage.addImage(active.id, file);
+    const imgs = await storage.listImages(active.id);
+    setImages(imgs);
+  };
 
-  const exportNotes = () => {
-    const blob = new Blob([storage.export()], { type: 'application/json' });
+  const handleRemoveImage = async (id: number) => {
+    await storage.removeImage(id);
+    if (active?.id) {
+      const imgs = await storage.listImages(active.id);
+      setImages(imgs);
+    }
+  };
+
+  /* === Export / Import === */
+  const handleExport = async () => {
+    const blob = new Blob([await storage.export()], {
+      type: 'application/json',
+    });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
     a.download = `portable-notes-${new Date().toISOString().slice(0, 10)}.json`;
     a.click();
   };
 
-  const importNotes = (file: File | null) => {
+  const handleImport = async (file: File | null) => {
     if (!file) return;
-    file.text().then(json => {
-      storage.import(json);
-      const all = storage.list();
-      setNotes(all);
-      setActive(all[0] ?? null);
-    });
+    const json = await file.text();
+    await storage.import(json);
+    const all = await storage.list();
+    setNotes(all);
+    setActive(all[0] ?? null);
   };
+
+  /* === Map d'URL d'images pour le rendu Markdown === */
+  const imageURLMap = useMemo(() => {
+  const entries = images
+    .filter((img) => img.id != null)
+    .map((img) => [String(img.id), URL.createObjectURL(img.data)] as const);
+  return new Map(entries);
+}, [images]);
+
+useEffect(() => {
+  // cleanup: révoque tous les blob: créés
+  return () => {
+    imageURLMap.forEach((u) => URL.revokeObjectURL(u));
+  };
+}, [imageURLMap]);
+
 
   return (
     <main className="flex min-h-screen bg-gray-900 text-gray-100">
-      {/* Liste */}
+      {/* === Liste des notes === */}
       <aside className="w-72 border-r border-gray-800 p-3 space-y-2">
         <button
           onClick={createNote}
@@ -80,28 +149,34 @@ export default function Page() {
         >
           + Nouvelle note
         </button>
+
         <div className="flex gap-2">
-          <button onClick={exportNotes} className="flex-1 py-1 bg-gray-800 rounded">
-            ⤓ Exporter
+          <button
+            onClick={handleExport}
+            className="flex-1 py-1 bg-gray-800 rounded"
+          >
+            ⤓ Export
           </button>
           <label className="flex-1 py-1 bg-gray-800 rounded text-center cursor-pointer">
-            ⤒ Importer
+            ⤒ Import
             <input
               type="file"
               accept="application/json"
               className="hidden"
-              onChange={e => importNotes(e.target.files?.[0] ?? null)}
+              onChange={(e) => handleImport(e.target.files?.[0] ?? null)}
             />
           </label>
         </div>
+
         <input
           value={search}
-          onChange={e => setSearch(e.target.value)}
+          onChange={(e) => setSearch(e.target.value)}
           placeholder="Rechercher..."
           className="w-full px-2 py-1 bg-gray-800 rounded"
         />
+
         <div className="space-y-1 max-h-[calc(100vh-200px)] overflow-y-auto">
-          {filtered.map(n => (
+          {filtered.map((n) => (
             <div
               key={n.id}
               onClick={() => setActive(n)}
@@ -120,28 +195,91 @@ export default function Page() {
         </div>
       </aside>
 
-      {/* Éditeur */}
+      {/* === Éditeur === */}
       <section className="flex-1 p-4 max-w-3xl mx-auto">
-        {!active ? (
+        {!draft ? (
           <div className="text-gray-500">Aucune note sélectionnée</div>
         ) : (
           <>
             <input
-              value={active.title}
-              onChange={e => updateNote({ title: e.target.value })}
+              value={draft.title}
+              onChange={(e) =>
+                setDraft((d) => d && { ...d, title: e.target.value })
+              }
               placeholder="Titre..."
               className="w-full text-2xl bg-transparent border-b border-gray-700 focus:outline-none mb-3"
             />
+
             <textarea
-              value={active.content}
-              onChange={e => updateNote({ content: e.target.value })}
+              value={draft.content}
+              onChange={(e) =>
+                setDraft((d) => d && { ...d, content: e.target.value })
+              }
               placeholder="Contenu (Markdown)..."
               rows={12}
               className="w-full p-2 bg-gray-800 rounded-lg focus:outline-none"
             />
+
+            {/* === Images === */}
+            <div className="mt-4">
+              <label className="bg-gray-800 px-3 py-1 rounded cursor-pointer">
+                📷 Ajouter une image
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) =>
+                    e.target.files?.[0] && handleAddImage(e.target.files[0])
+                  }
+                />
+              </label>
+
+              <div className="mt-3 flex flex-wrap gap-3">
+                {images.map((img) => {
+                  const blobUrl = URL.createObjectURL(img.data);
+                  return (
+                    <div
+                      key={img.id}
+                      className="relative border border-gray-700 rounded p-1 flex flex-col items-center"
+                    >
+                      <img
+                        src={blobUrl}
+                        alt={img.name}
+                        className="h-24 w-24 object-cover rounded"
+                      />
+                      <div className="flex gap-1 mt-1">
+                        <button
+                          onClick={() =>
+                            setDraft((d) =>
+                              d && {
+                                ...d,
+                                content:
+                                  (d.content || '') +
+                                  `\n\n![${img.name}](image:${img.id})\n`,
+                              },
+                            )
+                          }
+                          className="text-xs bg-blue-600 px-2 py-0.5 rounded hover:bg-blue-500"
+                        >
+                          ↳ insérer
+                        </button>
+                        <button
+                          onClick={() => handleRemoveImage(img.id!)}
+                          className="text-xs bg-red-600 px-2 py-0.5 rounded hover:bg-red-500"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* --- Pied de l’éditeur --- */}
             <div className="flex justify-between mt-3">
               <span className="text-xs text-gray-400">
-                {new Date(active.updatedAt).toLocaleTimeString()}
+                {new Date(draft.updatedAt).toLocaleTimeString()}
               </span>
               <div className="space-x-2">
                 <button
@@ -158,17 +296,44 @@ export default function Page() {
                 </button>
               </div>
             </div>
-            {preview && (
-  <div className="mt-4 p-4 bg-gray-800 rounded border border-gray-700 markdown-preview prose prose-invert max-w-none">
-    <ReactMarkdown
-      remarkPlugins={[remarkGfm]}
-      rehypePlugins={[rehypeHighlight]}
-    >
-      {active.content || ''}
-    </ReactMarkdown>
-  </div>
-)}
 
+            {/* === Preview Markdown === */}
+            {preview && (
+              <div className="mt-4 p-3 bg-gray-800 rounded border border-gray-700 markdown-preview">
+                <ReactMarkdown
+                  remarkPlugins={[remarkGfm]}
+                  rehypePlugins={[rehypeHighlight]}
+                  urlTransform={(src) => {
+                    const s = typeof src === 'string' ? src.trim() : '';
+                    if (!s) return '';
+                    if (s.startsWith('image:')) {
+                      const id = s.slice('image:'.length);
+                      return imageURLMap.get(id) ?? '';
+                    }
+                    return s;
+                  }}
+
+                  components={{
+                    img: (props) => {
+                      const raw = props.src;
+                      const src = typeof raw === 'string' ? raw.trim() : '';
+                      if (!src) return null; // évite <img src="">
+                      return (
+                        <img
+                          {...props}
+                          src={src}
+                          alt={props.alt ?? ''}
+                          className="max-w-full rounded my-2"
+                        />
+                      );
+                    },
+                  }}
+
+                >
+                  {draft.content}
+                </ReactMarkdown>
+              </div>
+            )}
           </>
         )}
       </section>
