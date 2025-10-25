@@ -108,6 +108,10 @@ export const storage = {
     return db.images.where('noteId').equals(noteId).toArray();
   },
 
+  async listAllImages(): Promise<ImageData[]> {
+  return db.images.toArray();
+},
+
   async removeImage(id: number) {
     await db.images.delete(id);
   },

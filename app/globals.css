@@ -99,3 +99,40 @@ body {
   font-style: italic;
   margin: 1rem 0;
 }
+img[style*="float"] {
+  border-radius: 8px;
+  margin-top: 0.5em;
+  margin-bottom: 0.5em;
+}
+img[style*="display:block"] {
+  display: block;
+  margin-top: 0.5em;
+  margin-bottom: 0.5em;
+}
+.markdown-preview table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1em 0;
+  font-size: 0.95rem;
+  background-color: #1f2937; /* gris foncé */
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.markdown-preview th,
+.markdown-preview td {
+  border: 1px solid #374151;
+  padding: 8px 12px;
+  text-align: left;
+}
+
+.markdown-preview th {
+  background-color: #111827;
+  font-weight: 600;
+  color: #f9fafb;
+}
+
+.markdown-preview tr:nth-child(even) {
+  background-color: #2d3748;
+}
+

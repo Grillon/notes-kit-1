@@ -6,6 +6,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
 import 'highlight.js/styles/github-dark.css';
+import { remarkAttributes } from './lib/remarkAttributes';
 
 export default function Page() {
   const [notes, setNotes] = useState<Note[]>([]);
@@ -24,29 +25,24 @@ export default function Page() {
     })();
   }, []);
 
+  /* === Charger le brouillon et les images === */
+  useEffect(() => {
+    queueMicrotask(() => setDraft(active ? { ...active } : null));
 
-/* === Charger le brouillon et les images === */
-useEffect(() => {
-  // On ne fait pas le setState directement
-  queueMicrotask(() => {
-    setDraft(active ? { ...active } : null);
-  });
-
-  let cancelled = false;
-  (async () => {
-    if (!active?.id) {
-      setImages([]);
-      return;
-    }
-    const imgs = await storage.listImages(active.id);
+    let cancelled = false;
+    (async () => {
+      if (!active?.id) {
+        setImages([]);
+        return;
+      }
+    const imgs = await storage.listAllImages();
     if (!cancelled) setImages(imgs);
-  })();
+    })();
 
-  return () => {
-    cancelled = true;
-  };
-}, [active]);
-
+    return () => {
+      cancelled = true;
+    };
+  }, [active]);
 
   /* === Autosave différée (brouillon → DB) === */
   useEffect(() => {
@@ -125,18 +121,73 @@ useEffect(() => {
 
   /* === Map d'URL d'images pour le rendu Markdown === */
   const imageURLMap = useMemo(() => {
-  const entries = images
-    .filter((img) => img.id != null)
-    .map((img) => [String(img.id), URL.createObjectURL(img.data)] as const);
-  return new Map(entries);
-}, [images]);
+    const entries = images
+      .filter((img) => img.id != null)
+      .map((img) => [String(img.id), URL.createObjectURL(img.data)] as const);
+    return new Map(entries);
+  }, [images]);
 
-useEffect(() => {
-  // cleanup: révoque tous les blob: créés
-  return () => {
-    imageURLMap.forEach((u) => URL.revokeObjectURL(u));
-  };
-}, [imageURLMap]);
+  useEffect(() => {
+    return () => {
+      imageURLMap.forEach((u) => URL.revokeObjectURL(u));
+    };
+  }, [imageURLMap]);
+
+  /* === Rendu Markdown avec images stylées === */
+  const markdownComponents = {
+  img: (props: any) => {
+    const raw = props.src;
+    const src = typeof raw === 'string' ? raw.trim() : '';
+    if (!src) return null;
+
+    const combinedStyle: React.CSSProperties = {
+      ...(typeof props.style === 'object' ? props.style : {}),
+      width: props.width || 'auto',
+      height: props.height || 'auto',
+      borderRadius: props['border-radius'] || '8px',
+      maxWidth: '100%',
+      display: 'block',
+      margin: 'auto',
+    };
+
+    const caption = props.caption || '';
+    const align = props.align || '';
+    const float = props.float || '';
+
+    const wrapperStyle: React.CSSProperties = {
+      textAlign: align === 'center' ? 'center' : undefined,
+      float: float === 'right' ? 'right' : float === 'left' ? 'left' : undefined,
+    };
+
+    const imgSrc = src.startsWith('image:')
+      ? imageURLMap.get(src.slice('image:'.length)) ?? ''
+      : src;
+
+    return (
+      <div style={wrapperStyle} className="my-2">
+        <img
+          {...props}
+          src={imgSrc}
+          alt={props.alt ?? ''}
+          style={combinedStyle}
+        />
+        {caption && (
+          <div
+            style={{
+              fontSize: '0.9em',
+              color: '#aaa',
+              fontStyle: 'italic',
+              marginTop: '0.2em',
+            }}
+          >
+            {caption}
+          </div>
+        )}
+      </div>
+    );
+  },
+};
+
 
 
   return (
@@ -255,7 +306,7 @@ useEffect(() => {
                                 ...d,
                                 content:
                                   (d.content || '') +
-                                  `\n\n![${img.name}](image:${img.id})\n`,
+                                  `\n\n![${img.name}](image:${img.id}){width=200px height=200px align=center}\n`,
                               },
                             )
                           }
@@ -301,7 +352,7 @@ useEffect(() => {
             {preview && (
               <div className="mt-4 p-3 bg-gray-800 rounded border border-gray-700 markdown-preview">
                 <ReactMarkdown
-                  remarkPlugins={[remarkGfm]}
+                  remarkPlugins={[remarkGfm, remarkAttributes]}
                   rehypePlugins={[rehypeHighlight]}
                   urlTransform={(src) => {
                     const s = typeof src === 'string' ? src.trim() : '';
@@ -312,23 +363,7 @@ useEffect(() => {
                     }
                     return s;
                   }}
-
-                  components={{
-                    img: (props) => {
-                      const raw = props.src;
-                      const src = typeof raw === 'string' ? raw.trim() : '';
-                      if (!src) return null; // évite <img src="">
-                      return (
-                        <img
-                          {...props}
-                          src={src}
-                          alt={props.alt ?? ''}
-                          className="max-w-full rounded my-2"
-                        />
-                      );
-                    },
-                  }}
-
+                  components={markdownComponents}
                 >
                   {draft.content}
                 </ReactMarkdown>
