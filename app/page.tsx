@@ -580,8 +580,19 @@ const markdownComponentsWithLinks = {
 >
   {renderMarkdown(draft?.content ?? '')}
 </ReactMarkdown>
-
+<div className="mt-4 flex flex-wrap gap-2">
+    {extractTags(draft.content).map((tag) => (
+      <button
+        key={tag}
+        onClick={() => setSearch('#' + tag)}
+        className="px-2 py-1 text-sm bg-gray-800 rounded hover:bg-gray-700 text-blue-400 border border-gray-700"
+      >
+        #{tag}
+      </button>
+    ))}
   </div>
+  </div>
+  
 </div>
 
           </>
