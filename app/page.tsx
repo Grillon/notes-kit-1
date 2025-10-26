@@ -17,6 +17,8 @@ export default function Page() {
   const [search, setSearch] = useState('');
   const [activeTab, setActiveTab] = useState<'edit' | 'preview'>('edit');
   const [menuOpen, setMenuOpen] = useState(false);
+  const [sidebarView, setSidebarView] = useState<'notes' | 'tags'>('notes');
+
 
 function extractTags(text: string): string[] {
   const regex = /#'([^']+)'|#(\w+)/g;
@@ -28,6 +30,13 @@ function extractTags(text: string): string[] {
   }
   return [...tags];
 }
+const allTags = useMemo(() => {
+  const tagSet = new Set<string>();
+  notes.forEach((n) => {
+    extractTags(n.content).forEach((t) => tagSet.add(t));
+  });
+  return [...tagSet].sort();
+}, [notes]);
 
 
   /* === Charger les notes === */
@@ -312,6 +321,25 @@ const markdownComponentsWithLinks = {
     ${menuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
   `}
 >
+  <div className="flex gap-2 mb-2">
+  <button
+    onClick={() => setSidebarView('notes')}
+    className={`flex-1 py-1 rounded ${
+      sidebarView === 'notes' ? 'bg-blue-600' : 'bg-gray-800'
+    }`}
+  >
+    🗒️ Notes
+  </button>
+  <button
+    onClick={() => setSidebarView('tags')}
+    className={`flex-1 py-1 rounded ${
+      sidebarView === 'tags' ? 'bg-blue-600' : 'bg-gray-800'
+    }`}
+  >
+    🏷️ Tags
+  </button>
+</div>
+
   <button
     onClick={createNote}
     className="w-full py-2 bg-blue-600 rounded hover:bg-blue-500"
@@ -345,12 +373,13 @@ const markdownComponentsWithLinks = {
   />
 
   <div className="space-y-1 max-h-[calc(100vh-200px)] overflow-y-auto">
-    {filtered.map((n) => (
+  {sidebarView === 'notes' ? (
+    filtered.map((n) => (
       <div
         key={n.id}
         onClick={() => {
           setActive(n);
-          setMenuOpen(false); // referme le menu après clic
+          setMenuOpen(false);
         }}
         className={`p-2 rounded cursor-pointer ${
           active?.id === n.id ? 'bg-blue-700' : 'hover:bg-gray-800'
@@ -363,8 +392,23 @@ const markdownComponentsWithLinks = {
           {new Date(n.updatedAt).toLocaleDateString()}
         </div>
       </div>
-    ))}
-  </div>
+    ))
+  ) : (
+    allTags.map((tag) => (
+      <div
+        key={tag}
+        onClick={() => {
+          setSearch('#' + tag);
+          setSidebarView('notes');
+        }}
+        className="p-2 rounded cursor-pointer hover:bg-gray-800 text-blue-400"
+      >
+        #{tag}
+      </div>
+    ))
+  )}
+</div>
+
 </aside>
 
       {/* === Éditeur === */}
