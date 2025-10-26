@@ -15,6 +15,10 @@ export default function Page() {
   const [images, setImages] = useState<ImageData[]>([]);
   const [preview, setPreview] = useState(false);
   const [search, setSearch] = useState('');
+  const [activeTab, setActiveTab] = useState<'edit' | 'preview'>('edit');
+  const [menuOpen, setMenuOpen] = useState(false);
+
+
 
   /* === Charger les notes === */
   useEffect(() => {
@@ -186,60 +190,98 @@ export default function Page() {
 
 
   return (
-    <main className="flex min-h-screen bg-gray-900 text-gray-100">
-      {/* === Liste des notes === */}
-      <aside className="w-72 border-r border-gray-800 p-3 space-y-2">
-        <button
-          onClick={createNote}
-          className="w-full py-2 bg-blue-600 rounded hover:bg-blue-500"
-        >
-          + Nouvelle note
-        </button>
+    <main className="flex min-h-screen bg-gray-900 text-gray-100 overflow-hidden">
+      {/* === Bouton mobile === */}
+<div className="md:hidden fixed top-3 right-3 z-20">
+  <button
+    onClick={() => setMenuOpen(!menuOpen)}
+    className="p-2 rounded bg-gray-800 hover:bg-gray-700"
+  >
+    {/* Icône burger simple */}
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      fill="none"
+      viewBox="0 0 24 24"
+      strokeWidth={2}
+      stroke="currentColor"
+      className="w-6 h-6"
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d={
+          menuOpen
+            ? 'M6 18L18 6M6 6l12 12' // croix
+            : 'M4 6h16M4 12h16M4 18h16' // trois barres
+        }
+      />
+    </svg>
+  </button>
+</div>
 
-        <div className="flex gap-2">
-          <button
-            onClick={handleExport}
-            className="flex-1 py-1 bg-gray-800 rounded"
-          >
-            ⤓ Export
-          </button>
-          <label className="flex-1 py-1 bg-gray-800 rounded text-center cursor-pointer">
-            ⤒ Import
-            <input
-              type="file"
-              accept="application/json"
-              className="hidden"
-              onChange={(e) => handleImport(e.target.files?.[0] ?? null)}
-            />
-          </label>
+{/* === Liste des notes === */}
+<aside
+  className={`
+    fixed md:static inset-y-0 left-0 z-10
+    w-72 bg-gray-900 border-r border-gray-800 p-3 space-y-2
+    transform transition-transform duration-300
+    ${menuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
+  `}
+>
+  <button
+    onClick={createNote}
+    className="w-full py-2 bg-blue-600 rounded hover:bg-blue-500"
+  >
+    + Nouvelle note
+  </button>
+
+  <div className="flex gap-2">
+    <button
+      onClick={handleExport}
+      className="flex-1 py-1 bg-gray-800 rounded"
+    >
+      ⤓ Export
+    </button>
+    <label className="flex-1 py-1 bg-gray-800 rounded text-center cursor-pointer">
+      ⤒ Import
+      <input
+        type="file"
+        accept="application/json"
+        className="hidden"
+        onChange={(e) => handleImport(e.target.files?.[0] ?? null)}
+      />
+    </label>
+  </div>
+
+  <input
+    value={search}
+    onChange={(e) => setSearch(e.target.value)}
+    placeholder="Rechercher..."
+    className="w-full px-2 py-1 bg-gray-800 rounded"
+  />
+
+  <div className="space-y-1 max-h-[calc(100vh-200px)] overflow-y-auto">
+    {filtered.map((n) => (
+      <div
+        key={n.id}
+        onClick={() => {
+          setActive(n);
+          setMenuOpen(false); // referme le menu après clic
+        }}
+        className={`p-2 rounded cursor-pointer ${
+          active?.id === n.id ? 'bg-blue-700' : 'hover:bg-gray-800'
+        }`}
+      >
+        <div className="font-semibold truncate">
+          {n.title || '(sans titre)'}
         </div>
-
-        <input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Rechercher..."
-          className="w-full px-2 py-1 bg-gray-800 rounded"
-        />
-
-        <div className="space-y-1 max-h-[calc(100vh-200px)] overflow-y-auto">
-          {filtered.map((n) => (
-            <div
-              key={n.id}
-              onClick={() => setActive(n)}
-              className={`p-2 rounded cursor-pointer ${
-                active?.id === n.id ? 'bg-blue-700' : 'hover:bg-gray-800'
-              }`}
-            >
-              <div className="font-semibold truncate">
-                {n.title || '(sans titre)'}
-              </div>
-              <div className="text-xs text-gray-400">
-                {new Date(n.updatedAt).toLocaleDateString()}
-              </div>
-            </div>
-          ))}
+        <div className="text-xs text-gray-400">
+          {new Date(n.updatedAt).toLocaleDateString()}
         </div>
-      </aside>
+      </div>
+    ))}
+  </div>
+</aside>
 
       {/* === Éditeur === */}
       <section className="flex-1 p-6 mx-auto w-full max-w-none">
@@ -254,16 +296,6 @@ export default function Page() {
               }
               placeholder="Titre..."
               className="w-full text-2xl bg-transparent border-b border-gray-700 focus:outline-none mb-3"
-            />
-
-            <textarea
-              value={draft.content}
-              onChange={(e) =>
-                setDraft((d) => d && { ...d, content: e.target.value })
-              }
-              placeholder="Contenu (Markdown)..."
-              rows={12}
-              className="w-full p-2 bg-gray-800 rounded-lg focus:outline-none"
             />
 
             {/* === Images === */}
@@ -344,26 +376,71 @@ export default function Page() {
             </div>
 
             {/* === Preview Markdown === */}
-            {preview && (
-              <div className="mt-4 p-3 bg-gray-800 rounded border border-gray-700 markdown-preview">
-                <ReactMarkdown
-                  remarkPlugins={[remarkGfm, remarkAttributes]}
-                  rehypePlugins={[rehypeHighlight]}
-                  urlTransform={(src) => {
-                    const s = typeof src === 'string' ? src.trim() : '';
-                    if (!s) return '';
-                    if (s.startsWith('image:')) {
-                      const id = s.slice('image:'.length);
-                      return imageURLMap.get(id) ?? '';
-                    }
-                    return s;
-                  }}
-                  components={markdownComponents}
-                >
-                  {draft.content}
-                </ReactMarkdown>
-              </div>
-            )}
+{/* === Zone d’édition + preview === */}
+<div className="flex flex-col md:flex-row gap-4 mt-4">
+  {/* === Éditeur === */}
+  <div className="flex-1">
+    {/* Onglets visibles uniquement sur mobile */}
+    <div className="flex md:hidden justify-around mb-2 border-b border-gray-700">
+      <button
+        onClick={() => setActiveTab('edit')}
+        className={`flex-1 py-2 ${
+          activeTab === 'edit'
+            ? 'border-b-2 border-blue-500 text-blue-400'
+            : 'text-gray-400'
+        }`}
+      >
+        ✍️ Édition
+      </button>
+      <button
+        onClick={() => setActiveTab('preview')}
+        className={`flex-1 py-2 ${
+          activeTab === 'preview'
+            ? 'border-b-2 border-blue-500 text-blue-400'
+            : 'text-gray-400'
+        }`}
+      >
+        👁️ Aperçu
+      </button>
+    </div>
+
+    {/* Zone d'édition */}
+    <div className={`${activeTab === 'edit' ? 'block' : 'hidden'} md:block`}>
+      <textarea
+        value={draft?.content ?? ''}
+        onChange={(e) =>
+          setDraft((d) => d && { ...d, content: e.target.value })
+        }
+        placeholder="Contenu (Markdown)..."
+        rows={16}
+        className="w-full p-2 bg-gray-800 rounded-lg focus:outline-none"
+      />
+    </div>
+  </div>
+
+  {/* === Preview Markdown === */}
+  <div
+    className={`${activeTab === 'preview' ? 'block' : 'hidden'} md:block flex-1 p-3 bg-gray-800 rounded border border-gray-700 markdown-preview overflow-auto`}
+  >
+    <ReactMarkdown
+      remarkPlugins={[remarkGfm, remarkAttributes]}
+      rehypePlugins={[rehypeHighlight]}
+      urlTransform={(src) => {
+        const s = typeof src === 'string' ? src.trim() : '';
+        if (!s) return '';
+        if (s.startsWith('image:')) {
+          const id = s.slice('image:'.length);
+          return imageURLMap.get(id) ?? '';
+        }
+        return s;
+      }}
+      components={markdownComponents}
+    >
+      {draft?.content ?? ''}
+    </ReactMarkdown>
+  </div>
+</div>
+
           </>
         )}
       </section>
