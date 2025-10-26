@@ -140,53 +140,48 @@ export default function Page() {
     const src = typeof raw === 'string' ? raw.trim() : '';
     if (!src) return null;
 
-    const combinedStyle: React.CSSProperties = {
+    const align = props.align ?? '';            // center | left | right
+    const floatDir = props.float ?? '';         // left | right
+
+    const style: React.CSSProperties = {
       ...(typeof props.style === 'object' ? props.style : {}),
       width: props.width || 'auto',
       height: props.height || 'auto',
       borderRadius: props['border-radius'] || '8px',
       maxWidth: '100%',
-      display: 'block',
-      margin: 'auto',
+      // no default centering anymore
     };
 
-    const caption = props.caption || '';
-    const align = props.align || '';
-    const float = props.float || '';
+    // Align: use block + margins only when needed
+    if (align === 'center') {
+      style.display = 'block';
+      style.marginLeft = 'auto';
+      style.marginRight = 'auto';
+    } else if (align === 'right') {
+      style.display = 'block';
+      style.marginLeft = 'auto';
+      style.marginRight = '0';
+    } else if (align === 'left') {
+      style.display = 'block';
+      style.marginLeft = '0';
+      style.marginRight = 'auto';
+    }
 
-    const wrapperStyle: React.CSSProperties = {
-      textAlign: align === 'center' ? 'center' : undefined,
-      float: float === 'right' ? 'right' : float === 'left' ? 'left' : undefined,
-    };
+    // Float if requested
+    if (floatDir === 'left' || floatDir === 'right') {
+      (style as any).float = floatDir; // or style.cssFloat = floatDir
+      // give a little breathing room around floated images
+      style.margin = style.margin ?? '0.5em';
+    }
 
     const imgSrc = src.startsWith('image:')
       ? imageURLMap.get(src.slice('image:'.length)) ?? ''
       : src;
 
-    return (
-      <div style={wrapperStyle} className="my-2">
-        <img
-          {...props}
-          src={imgSrc}
-          alt={props.alt ?? ''}
-          style={combinedStyle}
-        />
-        {caption && (
-          <div
-            style={{
-              fontSize: '0.9em',
-              color: '#aaa',
-              fontStyle: 'italic',
-              marginTop: '0.2em',
-            }}
-          >
-            {caption}
-          </div>
-        )}
-      </div>
-    );
+    return <img {...props} src={imgSrc} alt={props.alt ?? ''} style={style} />;
   },
 };
+
 
 
 
@@ -247,7 +242,7 @@ export default function Page() {
       </aside>
 
       {/* === Éditeur === */}
-      <section className="flex-1 p-4 max-w-3xl mx-auto">
+      <section className="flex-1 p-6 mx-auto w-full max-w-none">
         {!draft ? (
           <div className="text-gray-500">Aucune note sélectionnée</div>
         ) : (

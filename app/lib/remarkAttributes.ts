@@ -92,7 +92,7 @@ function parseAttributes(raw: string): { hProps: Record<string, string>; alt?: s
         const style =
           val === 'center'
             ? 'display:block;margin-left:auto;margin-right:auto;'
-            : `display:block;margin-${val}:auto;`;
+            : val === 'right' ? `display:block;margin-left:auto;` : `display:block;margin-right:auto;`;
         hProps.style = (hProps.style || '') + style;
       }
       continue;

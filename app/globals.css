@@ -99,6 +99,13 @@ body {
   font-style: italic;
   margin: 1rem 0;
 }
+
+/* Neutral defaults: no forced centering */
+.markdown-preview img {
+  max-width: 100%;
+  height: auto;
+}
+
 img[style*="float"] {
   border-radius: 8px;
   margin-top: 0.5em;
@@ -135,4 +142,29 @@ img[style*="display:block"] {
 .markdown-preview tr:nth-child(even) {
   background-color: #2d3748;
 }
+
+/* --- Corrige align=center/left/right sur les images Markdown --- */
+.markdown-preview p > img[align="center"] {
+  display: block;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.markdown-preview p > img[align="right"] {
+  display: block;
+  margin-left: auto;
+  margin-right: 0;
+}
+
+.markdown-preview p > img[align="left"] {
+  display: block;
+  margin-right: auto;
+  margin-left: 0;
+}
+
+/* Empêche un parent <p> de forcer le centrage de l’image */
+.markdown-preview p:has(img) {
+  text-align: initial;
+}
+
 
