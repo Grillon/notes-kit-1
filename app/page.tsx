@@ -186,6 +186,61 @@ export default function Page() {
   },
 };
 
+/* === Liens internes (note:id ou [[Nom]]) === */
+const renderMarkdown = (text: string) => {
+  // 1. Transforme [[Nom de note]] → [Nom de note](note:nom-de-note)
+  const transformed = text.replace(/\[\[(.+?)\]\]/g, (_, name) => {
+    const slug = name.trim().toLowerCase().replace(/\s+/g, '-');
+    return `[${name}](note:${slug})`;
+  });
+  return transformed;
+};
+
+/* === Lien vers une autre note === */
+const markdownComponentsWithLinks = {
+  ...markdownComponents,
+  a: (props: any) => {
+    const href = props.href ?? '';
+    const isInternal = href.startsWith('note:');
+
+    const handleClick = (e: React.MouseEvent) => {
+      if (!isInternal) return;
+
+      e.preventDefault();
+      const key = href.slice('note:'.length).toLowerCase();
+
+      // Recherche par id exact ou slug
+      const target =
+        notes.find((n) => String(n.id) === key) ||
+        notes.find(
+          (n) => n.title?.toLowerCase().replace(/\s+/g, '-') === key
+        );
+
+      if (target) {
+        setActive(target);
+        setPreview(false); // 🔥 ferme la preview si on change de note
+        setActiveTab('edit'); // 🔥 sur mobile : repasse en mode édition
+        window.scrollTo(0, 0);
+      } else {
+        console.warn('Note introuvable :', key);
+      }
+    };
+
+    return (
+      <a
+        {...props}
+        onClick={handleClick}
+        href={href}
+        className={`text-blue-400 underline ${
+          isInternal ? 'cursor-pointer' : ''
+        }`}
+      >
+        {props.children}
+      </a>
+    );
+  },
+};
+
 
 
 
@@ -423,21 +478,22 @@ export default function Page() {
     className={`${activeTab === 'preview' ? 'block' : 'hidden'} md:block flex-1 p-3 bg-gray-800 rounded border border-gray-700 markdown-preview overflow-auto`}
   >
     <ReactMarkdown
-      remarkPlugins={[remarkGfm, remarkAttributes]}
-      rehypePlugins={[rehypeHighlight]}
-      urlTransform={(src) => {
-        const s = typeof src === 'string' ? src.trim() : '';
-        if (!s) return '';
-        if (s.startsWith('image:')) {
-          const id = s.slice('image:'.length);
-          return imageURLMap.get(id) ?? '';
-        }
-        return s;
-      }}
-      components={markdownComponents}
-    >
-      {draft?.content ?? ''}
-    </ReactMarkdown>
+  remarkPlugins={[remarkGfm, remarkAttributes]}
+  rehypePlugins={[rehypeHighlight]}
+  urlTransform={(src) => {
+    const s = typeof src === 'string' ? src.trim() : '';
+    if (!s) return '';
+    if (s.startsWith('image:')) {
+      const id = s.slice('image:'.length);
+      return imageURLMap.get(id) ?? '';
+    }
+    return s;
+  }}
+  components={markdownComponentsWithLinks}
+>
+  {renderMarkdown(draft?.content ?? '')}
+</ReactMarkdown>
+
   </div>
 </div>
 
