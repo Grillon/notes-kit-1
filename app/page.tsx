@@ -18,6 +18,16 @@ export default function Page() {
   const [activeTab, setActiveTab] = useState<'edit' | 'preview'>('edit');
   const [menuOpen, setMenuOpen] = useState(false);
 
+function extractTags(text: string): string[] {
+  const regex = /#'([^']+)'|#(\w+)/g;
+  const tags = new Set<string>();
+  let match;
+  while ((match = regex.exec(text)) !== null) {
+    const tag = match[1] || match[2];
+    if (tag) tags.add(tag.trim().toLowerCase());
+  }
+  return [...tags];
+}
 
 
   /* === Charger les notes === */
@@ -50,17 +60,20 @@ export default function Page() {
 
   /* === Autosave différée (brouillon → DB) === */
   useEffect(() => {
-    if (!draft) return;
-    const t = setTimeout(async () => {
-      await storage.update(draft.id, {
-        title: draft.title,
-        content: draft.content,
-      });
-      const all = await storage.list();
-      setNotes(all);
-    }, 600);
-    return () => clearTimeout(t);
-  }, [draft]);
+  if (!draft) return;
+  const t = setTimeout(async () => {
+    const tags = extractTags(draft.content);
+    await storage.update(draft.id, {
+      title: draft.title,
+      content: draft.content,
+      tags,
+    });
+    const all = await storage.list();
+    setNotes(all);
+  }, 600);
+  return () => clearTimeout(t);
+}, [draft]);
+
 
   /* === Recherche === */
   const filtered = useMemo(() => {
@@ -139,6 +152,22 @@ export default function Page() {
 
   /* === Rendu Markdown avec images stylées === */
   const markdownComponents = {
+  text: ({ node, children }: any) => {
+    const text = String(children);
+    const parts = text.split(/(#'[^']+'|#\w+)/g);
+    return parts.map((part, i) => {
+      if (/^#'[^']+'|^#\w+/.test(part)) {
+        const tag = part.replace(/^#'|['"]$/g, '').replace(/^#/, '');
+        return (
+          <span key={i} className="text-blue-400 font-semibold">
+            #{tag}
+          </span>
+        );
+      }
+      return part;
+    });
+  },
+
   img: (props: any) => {
     const raw = props.src;
     const src = typeof raw === 'string' ? raw.trim() : '';
@@ -470,6 +499,20 @@ const markdownComponentsWithLinks = {
         rows={16}
         className="w-full p-2 bg-gray-800 rounded-lg focus:outline-none"
       />
+      {draft && extractTags(draft.content).length > 0 && (
+  <div className="mt-4 flex flex-wrap gap-2">
+    {extractTags(draft.content).map((tag) => (
+      <button
+        key={tag}
+        onClick={() => setSearch('#' + tag)}
+        className="px-2 py-1 text-sm bg-gray-800 rounded hover:bg-gray-700 text-blue-400 border border-gray-700"
+      >
+        #{tag}
+      </button>
+    ))}
+  </div>
+)}
+
     </div>
   </div>
 
