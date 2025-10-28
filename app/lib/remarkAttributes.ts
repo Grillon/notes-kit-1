@@ -1,4 +1,6 @@
 import { visit } from 'unist-util-visit';
+import type { Parent } from 'unist'
+import type { Literal } from 'mdast';
 
 /**
  * Gère les attributs d'image :
@@ -6,7 +8,8 @@ import { visit } from 'unist-util-visit';
  */
 export function remarkAttributes() {
   return (tree: any) => {
-    visit(tree, (node: any, index: number | null, parent: any) => {
+      visit(tree, (node: any, index?: number, parent?: Parent) => {
+
       if (!parent || !Array.isArray(parent.children)) return;
 
       if (node.type === 'image') {
@@ -24,7 +27,9 @@ export function remarkAttributes() {
 
         // Cas 2: attributs juste après l'image
         if (!attrsString && typeof index === 'number') {
-          const next = parent.children[index + 1];
+
+          const next = parent.children[index + 1] as Literal;
+
           if (next && next.type === 'text' && typeof next.value === 'string') {
             const m2 = next.value.match(/^\{([^}]+)\}\s*/);
             if (m2) {
