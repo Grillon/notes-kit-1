@@ -7,6 +7,10 @@ import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
 import 'highlight.js/styles/github-dark.css';
 import { remarkAttributes } from './lib/remarkAttributes';
+import { exportEncrypted, importDecrypted, type PenContainerV1 } from "./lib/crypto-pen";
+import { PasswordModal } from "./components/PasswordModal";
+
+let exportRunning = false;
 
 export default function Page() {
   const [notes, setNotes] = useState<Note[]>([]);
@@ -18,6 +22,9 @@ export default function Page() {
   const [activeTab, setActiveTab] = useState<'edit' | 'preview'>('edit');
   const [menuOpen, setMenuOpen] = useState(false);
   const [sidebarView, setSidebarView] = useState<'notes' | 'tags'>('notes');
+  const [modalOpen, setModalOpen] = useState(false);
+  const [modalAction, setModalAction] = useState<"encrypt" | "decrypt" | null>(null);
+  const [modalTitle, setModalTitle] = useState("");
 
 
 function extractTags(text: string): string[] {
@@ -126,6 +133,95 @@ const allTags = useMemo(() => {
   };
 
   /* === Export / Import === */
+
+// Utilitaires de download / open-file (adapter aux tiens si tu en as déjà)
+function downloadJSON(obj: unknown, filename: string) {
+  const blob = new Blob([JSON.stringify(obj, null, 2)], { type: "application/pen+json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+async function openJSONFile(): Promise<any> {
+  return new Promise((resolve, reject) => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = ".json,.pen.json,application/json,application/pen+json";
+    input.onchange = async () => {
+      const file = input.files?.[0];
+      if (!file) return reject(new Error("NoFile"));
+      const text = await file.text();
+      resolve(JSON.parse(text));
+    };
+    input.click();
+  });
+}
+
+// === EXPORT CHIFFRÉ (basé sur l'export clair déjà propre) ===
+let exportRunning = false;
+
+async function handleExportEncrypted(password: string) {
+  if (exportRunning) {
+    console.warn("Export déjà en cours, ignoré");
+    return;
+  }
+  exportRunning = true;
+  try {
+    console.log("=== lancement unique export chiffré ===");
+    const clearText = await storage.export();
+    const encrypted = await exportEncrypted(clearText, password);
+    const blob = new Blob([JSON.stringify(encrypted, null, 2)], {
+      type: "application/pen+json",
+    });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `portable-notes-${new Date().toISOString().slice(0, 10)}.pen.json`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  } catch (e) {
+    console.error("Erreur export chiffré:", e);
+  } finally {
+    exportRunning = false;
+  }
+}
+
+
+// === IMPORT CHIFFRÉ (décode, puis importe le JSON clair) ===
+async function handleImportEncrypted(password: string) {
+  try {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = ".pen.json,application/pen+json";
+    input.onchange = async () => {
+      const file = input.files?.[0];
+      if (!file) return;
+      const payload = JSON.parse(await file.text());
+      if (payload?.format !== "pen") {
+        alert("Ce fichier n’est pas un export chiffré (.pen.json).");
+        return;
+      }
+
+      // 1️⃣ Déchiffre (retourne la chaîne JSON claire)
+      const clearText = (await importDecrypted(payload, password)) as string;
+
+      // 2️⃣ Réutilise ton import standard
+      await storage.import(clearText);
+      const all = await storage.list();
+      setNotes(all);
+      setActive(all[0] ?? null);
+      alert("Import chiffré OK ✅");
+    };
+    input.click();
+  } catch (e) {
+    console.error("Erreur import chiffré:", e);
+    alert("Erreur lors de l’import chiffré");
+  }
+}
+
+
   const handleExport = async () => {
     const blob = new Blob([await storage.export()], {
       type: 'application/json',
@@ -364,6 +460,32 @@ const markdownComponentsWithLinks = {
       />
     </label>
   </div>
+  {/* === Export / Import chiffrés === */}
+{/* === Export / Import chiffrés === */}
+<div className="flex gap-2 mt-1">
+  <button
+    onClick={async () => {
+      setModalTitle("Mot de passe pour chiffrer l’export");
+      setModalAction("encrypt");
+      setModalOpen(true);
+    }}
+    className="flex-1 py-1 bg-blue-600 rounded hover:bg-blue-500"
+  >
+    🔒 Export chiffré
+  </button>
+
+  <button
+    onClick={async () => {
+      setModalTitle("Mot de passe pour déchiffrer l’import");
+      setModalAction("decrypt");
+      setModalOpen(true);
+    }}
+    className="flex-1 py-1 bg-blue-600 rounded hover:bg-blue-500"
+  >
+    🔓 Import chiffré
+  </button>
+</div>
+
 
   <input
     value={search}
@@ -598,6 +720,25 @@ const markdownComponentsWithLinks = {
           </>
         )}
       </section>
+      <PasswordModal
+  open={modalOpen}
+  title={modalTitle}
+  confirmLabel={modalAction === "encrypt" ? "Chiffrer" : "Déchiffrer"}
+  onSubmit={async (pwd) => {
+  setModalOpen(false);
+  try {
+    if (modalAction === "encrypt") {
+      await handleExportEncrypted(pwd);
+    } else if (modalAction === "decrypt") {
+      await handleImportEncrypted(pwd);
+    }
+  } catch (e) {
+    console.error(e);
+    alert("Erreur pendant le processus chiffré");
+  }
+}}
+  onCancel={() => setModalOpen(false)}
+/>
     </main>
   );
 }

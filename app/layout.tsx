@@ -32,7 +32,23 @@ export default function RootLayout({
         {/* 👇 Forçage manuel du favicon */}
         <link rel="icon" type="image/png" href="/favicon.png?v=2" />
         <link rel="manifest" href="/manifest.json" />
+         <meta
+  httpEquiv="Content-Security-Policy"
+  content={[
+    "default-src 'self'",
+    "script-src 'self' 'unsafe-inline'",
+    "style-src 'self' 'unsafe-inline'",
+    "img-src 'self' blob: data:",
+    "font-src 'self'",
+    "connect-src 'self'",
+    "object-src 'none'",
+    "base-uri 'none'",
+    "frame-ancestors 'none'",
+  ].join('; ')}
+/>
+
         <meta name="theme-color" content="#1e90ff" />
+        
 
       </head>
 
