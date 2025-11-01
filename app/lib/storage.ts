@@ -115,4 +115,19 @@ export const storage = {
   async removeImage(id: number) {
     await db.images.delete(id);
   },
+      // ... en bas de storage
+async exportNote(noteId: string): Promise<string> {
+  const note = await db.notes.get(noteId);
+  if (!note) throw new Error('Note introuvable');
+
+  const images = await db.images.where('noteId').equals(noteId).toArray();
+  const imageData = await Promise.all(
+    images.map(async (img) => ({
+      ...img,
+      data: await blobToBase64(img.data), // <-- base64 inside JSON
+    })),
+  );
+
+  return JSON.stringify({ notes: [note], images: imageData }, null, 2);
+},
 };

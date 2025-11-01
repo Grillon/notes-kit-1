@@ -95,7 +95,7 @@ export default function Page() {
     <main className="flex min-h-screen bg-gray-900 text-gray-100 overflow-hidden">
       {/* Panneau gauche */}
       <Sidebar
-        notes={filtered}
+        notes={notes}
         active={active}
         onSelect={setActive}
         onCreate={createNote}

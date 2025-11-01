@@ -93,7 +93,9 @@ export default function NoteEditor({
   onInsertText={(snippet) =>
     setDraft((d) => d && { ...d, content: (d.content || '') + '\n' + snippet })
   }
+  onRemoveImage={handleRemoveImage}
 />
+
 
 
       {/* --- Pied --- */}
