@@ -65,13 +65,17 @@ export default function NoteEditor({
     })();
   }, [active, setImages, setFiles]);
 
+
   // Maps locales d’URL
-  const imageURLMap = useMemo(() => {
-    const entries = images
-      .filter((img) => img.id != null)
-      .map((img) => [String(img.id), URL.createObjectURL(img.data)] as const);
-    return new Map(entries);
-  }, [images]);
+  // Map d'URL pour affichage local (toutes les images connues)
+const imageURLMap = useMemo(() => {
+  const imgs = [...images, ...allImages]; // fusionne les deux sources
+  const entries = imgs
+    .filter((img) => img.id != null)
+    .map((img) => [String(img.id), URL.createObjectURL(img.data)] as const);
+  return new Map(entries);
+}, [images, allImages]);
+
   useEffect(() => () => imageURLMap.forEach((u) => URL.revokeObjectURL(u)), [imageURLMap]);
 
   const fileURLMap = useMemo(() => {
@@ -141,6 +145,8 @@ export default function NoteEditor({
 
       {/* === Toolbar === */}
       <NoteToolbar
+        activeId={active?.id ?? ''}
+        key={active?.id}
         images={images}
         files={files}
         allImages={allImages}

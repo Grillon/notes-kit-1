@@ -191,29 +191,62 @@ export const storage = {
   },
 
   /* === EXPORT INDIVIDUEL (note + images + fichiers liés) === */
-  async exportNote(noteId: string): Promise<string> {
-    const note = await db.notes.get(noteId);
-    if (!note) throw new Error('Note introuvable');
+  /* === EXPORT INDIVIDUEL (note + images/fichiers référencés, même externes) === */
+async exportNote(noteId: string): Promise<string> {
+  const note = await db.notes.get(noteId);
+  if (!note) throw new Error('Note introuvable');
 
-    const images = await db.images.where('noteId').equals(noteId).toArray();
-    const files = await db.files.where('noteId').equals(noteId).toArray();
+  // --- Étape 1 : récupérer les références externes dans le contenu ---
+  const content = note.content || '';
+  const imageIds = Array.from(content.matchAll(/image:(\d+)/g)).map((m) => Number(m[1]));
+  const fileIds = Array.from(content.matchAll(/file:(\d+)/g)).map((m) => Number(m[1]));
 
-    const imageData = await Promise.all(
-      images.map(async (img) => ({
-        ...img,
-        data: await blobToBase64(img.data),
-      }))
-    );
+  // --- Étape 2 : récupérer les images et fichiers (internes + externes) ---
+  const ownImages = await db.images.where('noteId').equals(noteId).toArray();
+  const refImages =
+    imageIds.length > 0
+      ? await db.images.where('id').anyOf(imageIds).toArray()
+      : [];
+  const allImages = [...ownImages, ...refImages].reduce((acc, img) => {
+    if (!acc.some((i) => i.id === img.id)) acc.push(img);
+    return acc;
+  }, [] as ImageData[]);
 
-    const fileData = await Promise.all(
-      files.map(async (f) => ({
-        ...f,
-        data: await blobToBase64(f.data),
-      }))
-    );
+  const ownFiles = await db.files.where('noteId').equals(noteId).toArray();
+  const refFiles =
+    fileIds.length > 0
+      ? await db.files.where('id').anyOf(fileIds).toArray()
+      : [];
+  const allFiles = [...ownFiles, ...refFiles].reduce((acc, f) => {
+    if (!acc.some((i) => i.id === f.id)) acc.push(f);
+    return acc;
+  }, [] as FileData[]);
 
-    return JSON.stringify({ notes: [note], images: imageData, files: fileData }, null, 2);
-  },
+  // --- Étape 3 : convertir en base64 ---
+  const imageData = await Promise.all(
+    allImages.map(async (img) => ({
+      ...img,
+      data: await blobToBase64(img.data),
+    }))
+  );
+  const fileData = await Promise.all(
+    allFiles.map(async (f) => ({
+      ...f,
+      data: await blobToBase64(f.data),
+    }))
+  );
+
+  // --- Étape 4 : produire le JSON complet ---
+  return JSON.stringify(
+    {
+      notes: [note],
+      images: imageData,
+      files: fileData,
+    },
+    null,
+    2
+  );
+},
   async listAllImages(): Promise<ImageData[]> {
   return db.images.toArray();
 },
