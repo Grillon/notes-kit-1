@@ -8,6 +8,7 @@ import { extractTags, renderMarkdown } from '../lib/markdown-utils';
 import type { Note, ImageData } from '../types';
 import { storage } from '../lib/storage';
 import { remarkAttributes } from '../lib/remarkAttributes';
+import NoteToolbar from './NoteToolbar';
 
 type Props = {
   active: Note | null;
@@ -76,6 +77,7 @@ export default function NoteEditor({
 
   return (
     <>
+
       {/* === Titre === */}
       <input
         value={draft.title}
@@ -85,62 +87,14 @@ export default function NoteEditor({
         placeholder="Titre..."
         className="w-full text-2xl bg-transparent border-b border-gray-700 focus:outline-none mb-3"
       />
+<NoteToolbar
+  images={images}
+  onAddImage={handleAddImage}
+  onInsertText={(snippet) =>
+    setDraft((d) => d && { ...d, content: (d.content || '') + '\n' + snippet })
+  }
+/>
 
-      {/* === Images === */}
-      <div className="mt-4">
-        <label className="bg-gray-800 px-3 py-1 rounded cursor-pointer">
-          📷 Ajouter une image
-          <input
-            type="file"
-            accept="image/*"
-            className="hidden"
-            onChange={(e) =>
-              e.target.files?.[0] && handleAddImage(e.target.files[0])
-            }
-          />
-        </label>
-
-        <div className="mt-3 flex flex-wrap gap-3">
-          {images.map((img) => {
-            const blobUrl = URL.createObjectURL(img.data);
-            return (
-              <div
-                key={img.id}
-                className="relative border border-gray-700 rounded p-1 flex flex-col items-center"
-              >
-                <img
-                  src={blobUrl}
-                  alt={img.name}
-                  className="h-24 w-24 object-cover rounded"
-                />
-                <div className="flex gap-1 mt-1">
-                  <button
-                    onClick={() =>
-                      setDraft((d) =>
-                        d && {
-                          ...d,
-                          content:
-                            (d.content || '') +
-                            `\n\n![${img.name}](image:${img.id}){width=200px height=200px align=center}\n`,
-                        },
-                      )
-                    }
-                    className="text-xs bg-blue-600 px-2 py-0.5 rounded hover:bg-blue-500"
-                  >
-                    ↳ insérer
-                  </button>
-                  <button
-                    onClick={() => handleRemoveImage(img.id!)}
-                    className="text-xs bg-red-600 px-2 py-0.5 rounded hover:bg-red-500"
-                  >
-                    ✕
-                  </button>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
 
       {/* --- Pied --- */}
       <div className="flex justify-between mt-3">
