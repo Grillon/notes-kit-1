@@ -214,4 +214,12 @@ export const storage = {
 
     return JSON.stringify({ notes: [note], images: imageData, files: fileData }, null, 2);
   },
+  async listAllImages(): Promise<ImageData[]> {
+  return db.images.toArray();
+},
+
+async listAllFiles(): Promise<FileData[]> {
+  return db.files.toArray();
+},
+
 };

@@ -1,11 +1,13 @@
+// app/components/NoteToolbar.tsx
 'use client';
 import { useState } from 'react';
-import type { ImageData } from '../types';
-import type { FileData } from '../lib/storage';
+import type { ImageData, FileData } from '../types';
 
 interface NoteToolbarProps {
   images: ImageData[];
   files: FileData[];
+  allImages?: ImageData[];
+  allFiles?: FileData[];
   onAddImage: (file: File) => void;
   onAddFile: (file: File) => void;
   onInsertText: (snippet: string) => void;
@@ -16,6 +18,8 @@ interface NoteToolbarProps {
 export default function NoteToolbar({
   images,
   files,
+  allImages,
+  allFiles,
   onAddImage,
   onAddFile,
   onInsertText,
@@ -23,6 +27,7 @@ export default function NoteToolbar({
   onRemoveFile,
 }: NoteToolbarProps) {
   const [tab, setTab] = useState<'markdown' | 'images' | 'files'>('markdown');
+  const [showAll, setShowAll] = useState(false);
 
   return (
     <div className="bg-gray-800/95 backdrop-blur-sm rounded-lg p-2 mb-3 sticky top-0 z-10 shadow-md h-52 flex flex-col">
@@ -33,7 +38,9 @@ export default function NoteToolbar({
             key={t}
             onClick={() => setTab(t as any)}
             className={`px-3 py-1 rounded-t text-sm font-medium ${
-              tab === t ? 'bg-gray-900 text-blue-400' : 'text-gray-400 hover:text-blue-300'
+              tab === t
+                ? 'bg-gray-900 text-blue-400'
+                : 'text-gray-400 hover:text-blue-300'
             }`}
           >
             {t === 'markdown'
@@ -47,7 +54,7 @@ export default function NoteToolbar({
 
       {/* === Contenu des onglets === */}
       <div className="h-full overflow-y-auto p-2">
-        {/* Onglet Markdown */}
+        {/* --- Onglet Markdown --- */}
         {tab === 'markdown' && (
           <div className="flex flex-wrap gap-2">
             {[
@@ -71,7 +78,7 @@ export default function NoteToolbar({
           </div>
         )}
 
-        {/* Onglet Images */}
+        {/* --- Onglet Images --- */}
         {tab === 'images' && (
           <div className="space-y-2">
             <label className="bg-gray-700 px-3 py-1 rounded cursor-pointer inline-block hover:bg-gray-600">
@@ -80,12 +87,14 @@ export default function NoteToolbar({
                 type="file"
                 accept="image/*"
                 className="hidden"
-                onChange={(e) => e.target.files?.[0] && onAddImage(e.target.files[0])}
+                onChange={(e) =>
+                  e.target.files?.[0] && onAddImage(e.target.files[0])
+                }
               />
             </label>
 
             <div className="flex flex-wrap gap-3">
-              {images.map((img) => {
+              {(showAll ? allImages ?? [] : images).map((img) => {
                 const blobUrl = URL.createObjectURL(img.data);
                 return (
                   <div
@@ -132,22 +141,33 @@ export default function NoteToolbar({
           </div>
         )}
 
-        {/* Onglet Fichiers */}
+        {/* --- Onglet Fichiers --- */}
         {tab === 'files' && (
           <div className="space-y-2">
-            <label className="bg-gray-700 px-3 py-1 rounded cursor-pointer inline-block hover:bg-gray-600">
-              📎 Ajouter un fichier
-              <input
-                type="file"
-                className="hidden"
-                onChange={(e) =>
-                  e.target.files?.[0] && onAddFile(e.target.files[0])
-                }
-              />
-            </label>
+            <div className="flex items-center justify-between">
+              <label className="text-sm text-gray-300 flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={showAll}
+                  onChange={(e) => setShowAll(e.target.checked)}
+                  className="accent-blue-500"
+                />
+                Afficher tout
+              </label>
+              <label className="bg-gray-700 px-3 py-1 rounded cursor-pointer inline-block hover:bg-gray-600">
+                📎 Ajouter un fichier
+                <input
+                  type="file"
+                  className="hidden"
+                  onChange={(e) =>
+                    e.target.files?.[0] && onAddFile(e.target.files[0])
+                  }
+                />
+              </label>
+            </div>
 
             <div className="flex flex-wrap gap-3">
-              {files.map((f) => {
+              {(showAll ? allFiles ?? [] : files).map((f) => {
                 const blobUrl = URL.createObjectURL(f.data);
                 return (
                   <div
@@ -160,9 +180,7 @@ export default function NoteToolbar({
                     <div className="flex gap-1 mt-1">
                       <button
                         title="Insérer dans la note"
-                        onClick={() =>
-                          onInsertText(`[${f.name}](file:${f.id})`)
-                        }
+                        onClick={() => onInsertText(`[${f.name}](file:${f.id})`)}
                         className="text-xs bg-blue-600 px-2 py-0.5 rounded hover:bg-blue-500"
                       >
                         ↳

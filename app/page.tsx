@@ -1,3 +1,4 @@
+// app/page.tsx
 'use client';
 import { useState, useMemo } from 'react';
 import { storage } from './lib/storage';
@@ -7,6 +8,8 @@ import { useVault } from './hooks/useVault';
 import Sidebar from './components/Sidebar';
 import NoteEditor from './components/NoteEditor';
 import { encryptVault, decryptVault, type PenContainerV1 } from './lib/crypto-pen';
+
+
 
 export default function Page() {
   const { notes, setNotes, active, setActive, draft, setDraft, search, setSearch, filtered } =
