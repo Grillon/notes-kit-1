@@ -14,3 +14,12 @@ export interface ImageData {
   data: Blob;
   createdAt: string;
 }
+
+export type FileData = {
+  id?: number;
+  noteId: string;
+  name: string;
+  data: Blob;
+  type: string;
+  createdAt: string;
+};

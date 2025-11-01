@@ -1,6 +1,8 @@
 'use client';
 import React from 'react';
 import type { Note } from '../types';
+import { storage } from '../lib/storage';
+
 
 type Props = {
   notes: Note[];
@@ -37,6 +39,8 @@ export default function Sidebar({
   menuOpen,
   setMenuOpen,
 }: Props) {
+      const filtered = notes; // ✅ simple alias pour corriger l'erreur
+
   return (
     <>
       {/* === Bouton burger (mobile) === */}
@@ -142,50 +146,99 @@ export default function Sidebar({
         </div>
 
         {/* --- Barre de recherche --- */}
-        <input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Rechercher..."
-          className="w-full px-2 py-1 bg-gray-800 rounded"
-        />
+        <div className="relative w-full">
+  <input
+    value={search}
+    onChange={(e) => setSearch(e.target.value)}
+    placeholder="Rechercher..."
+    className="w-full px-2 py-1 bg-gray-800 rounded pr-8"
+  />
+  {search && (
+    <button
+      onClick={() => setSearch('')}
+      className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-red-400"
+      title="Effacer"
+    >
+      ✕
+    </button>
+  )}
+</div>
 
-        {/* --- Liste notes / tags --- */}
+
+        
+
         <div className="space-y-1 max-h-[calc(100vh-200px)] overflow-y-auto">
-          {sidebarView === 'notes' ? (
-            notes.map((n) => (
-              <div
-                key={n.id}
-                onClick={() => {
-                  onSelect(n);
-                  setMenuOpen(false);
-                }}
-                className={`p-2 rounded cursor-pointer ${
-                  active?.id === n.id ? 'bg-blue-700' : 'hover:bg-gray-800'
-                }`}
-              >
-                <div className="font-semibold truncate">
-                  {n.title || '(sans titre)'}
-                </div>
-                <div className="text-xs text-gray-400">
-                  {new Date(n.updatedAt).toLocaleDateString()}
-                </div>
-              </div>
-            ))
-          ) : (
-            allTags.map((tag) => (
-              <div
-                key={tag}
-                onClick={() => {
-                  setSearch('#' + tag);
-                  setSidebarView('notes');
-                }}
-                className="p-2 rounded cursor-pointer hover:bg-gray-800 text-blue-400"
-              >
-                #{tag}
-              </div>
-            ))
-          )}
+  {sidebarView === 'notes' ? (
+    notes.map((n) => (
+      <div
+        key={n.id}
+        className={`p-2 rounded cursor-pointer flex justify-between items-center ${
+          active?.id === n.id ? 'bg-blue-700' : 'hover:bg-gray-800'
+        }`}
+      >
+        <div
+          className="flex-1 min-w-0"
+          onClick={() => {
+            onSelect(n);
+            setMenuOpen(false);
+          }}
+        >
+          <div className="font-semibold truncate">
+            {n.title || '(sans titre)'}
+          </div>
+          <div className="text-xs text-gray-400">
+            {new Date(n.updatedAt).toLocaleDateString()}
+          </div>
         </div>
+
+        {/* --- Export individuel chiffré --- */}
+        <button
+          onClick={async (e) => {
+            e.stopPropagation();
+            const password = prompt('Mot de passe pour le chiffrement :');
+            if (!password) return;
+
+            try {
+              const raw = await storage.exportNote(n.id);
+              const obj = JSON.parse(raw);
+              const { encryptVault } = await import('../lib/crypto-pen');
+              const encrypted = await encryptVault(password, obj);
+
+              const blob = new Blob([JSON.stringify(encrypted, null, 2)], {
+                type: 'application/pen+json',
+              });
+              const a = document.createElement('a');
+              a.href = URL.createObjectURL(blob);
+              a.download = `${n.title || 'note'}-encrypted.pen.json`;
+              a.click();
+              URL.revokeObjectURL(a.href);
+            } catch (err) {
+              console.error('Erreur export individuel', err);
+              alert('❌ Erreur lors de l’export de la note');
+            }
+          }}
+          className="ml-2 text-xs px-2 py-1 rounded bg-gray-700 hover:bg-gray-600 text-blue-300"
+          title="Exporter cette note (chiffré)"
+        >
+          ⤓
+        </button>
+      </div>
+    ))
+  ) : (
+    allTags.map((tag) => (
+      <div
+        key={tag}
+        onClick={() => {
+          setSearch('#' + tag);
+          setSidebarView('notes');
+        }}
+        className="p-2 rounded cursor-pointer hover:bg-gray-800 text-blue-400"
+      >
+        #{tag}
+      </div>
+    ))
+  )}
+</div>
       </aside>
     </>
   );

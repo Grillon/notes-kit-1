@@ -1,13 +1,15 @@
 'use client';
-import React, { useEffect, useMemo } from 'react';
+import React, { useEffect, useMemo, useState, useRef } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
 import 'highlight.js/styles/github-dark.css';
 import { extractTags, renderMarkdown } from '../lib/markdown-utils';
 import type { Note, ImageData } from '../types';
+import type { FileData } from '../lib/storage';
 import { storage } from '../lib/storage';
 import { remarkAttributes } from '../lib/remarkAttributes';
+import NoteToolbar from './NoteToolbar';
 
 type Props = {
   active: Note | null;
@@ -22,6 +24,8 @@ type Props = {
   setSearch: (s: string) => void;
   images: ImageData[];
   setImages: (imgs: ImageData[]) => void;
+  files: FileData[];
+  setFiles: (f: FileData[]) => void;
 };
 
 export default function NoteEditor({
@@ -37,20 +41,31 @@ export default function NoteEditor({
   setSearch,
   images,
   setImages,
+  files,
+  setFiles,
 }: Props) {
-  // Charger images liées
+  const [allFiles, setAllFiles] = useState<FileData[]>([]);
+  const [allImages, setAllImages] = useState<ImageData[]>([]);
+  const textAreaRef = useRef<HTMLTextAreaElement | null>(null);
+
+  // Charger images et fichiers liés
   useEffect(() => {
     (async () => {
       if (active?.id) {
         const imgs = await storage.listImages(active.id);
+        const fls = await storage.listFiles(active.id);
+        setAllFiles(await storage.listAllFiles());
+        setAllImages(await storage.listAllImages());
         setImages(imgs);
+        setFiles(fls);
       } else {
         setImages([]);
+        setFiles([]);
       }
     })();
-  }, [active, setImages]);
+  }, [active, setImages, setFiles]);
 
-  // Map d'URL pour affichage local
+  // Maps locales d’URL
   const imageURLMap = useMemo(() => {
     const entries = images
       .filter((img) => img.id != null)
@@ -59,88 +74,83 @@ export default function NoteEditor({
   }, [images]);
   useEffect(() => () => imageURLMap.forEach((u) => URL.revokeObjectURL(u)), [imageURLMap]);
 
-  // Ajout / suppression images
+  const fileURLMap = useMemo(() => {
+    const entries = files
+      .filter((f) => f.id != null)
+      .map((f) => [String(f.id), URL.createObjectURL(f.data)] as const);
+    return new Map(entries);
+  }, [files]);
+  useEffect(() => () => fileURLMap.forEach((u) => URL.revokeObjectURL(u)), [fileURLMap]);
+  useEffect(() => {
+  return () => allFiles.forEach((f) => URL.revokeObjectURL(URL.createObjectURL(f.data)));
+}, [allFiles]);
+
+
+  // === Insertion au curseur ===
+  const insertAtCursor = (snippet: string) => {
+    if (!textAreaRef.current) return;
+    const textarea = textAreaRef.current;
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const value = textarea.value;
+    const newValue = value.slice(0, start) + snippet + value.slice(end);
+    setDraft((d) => d && { ...d, content: newValue });
+    requestAnimationFrame(() => {
+      textarea.focus();
+      textarea.selectionStart = textarea.selectionEnd = start + snippet.length;
+    });
+  };
+
+  // === Gestion images ===
   const handleAddImage = async (file: File) => {
     if (!active?.id) return;
     await storage.addImage(active.id, file);
-    const imgs = await storage.listImages(active.id);
-    setImages(imgs);
+    setImages(await storage.listImages(active.id));
+    setAllImages(await storage.listAllImages());
   };
   const handleRemoveImage = async (id: number) => {
     await storage.removeImage(id);
     if (active?.id) setImages(await storage.listImages(active.id));
+    setAllImages(await storage.listAllImages());
   };
 
-  if (!draft)
-    return <div className="text-gray-500">Aucune note sélectionnée</div>;
+  // === Gestion fichiers ===
+  const handleAddFile = async (file: File) => {
+    if (!active?.id) return;
+    await storage.addFile(active.id, file);
+    setFiles(await storage.listFiles(active.id));
+    setAllFiles(await storage.listAllFiles());
+  };
+  const handleRemoveFile = async (id: number) => {
+    await storage.removeFile(id);
+    if (active?.id) setFiles(await storage.listFiles(active.id));
+    setAllFiles(await storage.listAllFiles());
+  };
+
+  if (!draft) return <div className="text-gray-500">Aucune note sélectionnée</div>;
 
   return (
     <>
       {/* === Titre === */}
       <input
         value={draft.title}
-        onChange={(e) =>
-          setDraft((d) => d && { ...d, title: e.target.value })
-        }
+        onChange={(e) => setDraft((d) => d && { ...d, title: e.target.value })}
         placeholder="Titre..."
         className="w-full text-2xl bg-transparent border-b border-gray-700 focus:outline-none mb-3"
       />
 
-      {/* === Images === */}
-      <div className="mt-4">
-        <label className="bg-gray-800 px-3 py-1 rounded cursor-pointer">
-          📷 Ajouter une image
-          <input
-            type="file"
-            accept="image/*"
-            className="hidden"
-            onChange={(e) =>
-              e.target.files?.[0] && handleAddImage(e.target.files[0])
-            }
-          />
-        </label>
-
-        <div className="mt-3 flex flex-wrap gap-3">
-          {images.map((img) => {
-            const blobUrl = URL.createObjectURL(img.data);
-            return (
-              <div
-                key={img.id}
-                className="relative border border-gray-700 rounded p-1 flex flex-col items-center"
-              >
-                <img
-                  src={blobUrl}
-                  alt={img.name}
-                  className="h-24 w-24 object-cover rounded"
-                />
-                <div className="flex gap-1 mt-1">
-                  <button
-                    onClick={() =>
-                      setDraft((d) =>
-                        d && {
-                          ...d,
-                          content:
-                            (d.content || '') +
-                            `\n\n![${img.name}](image:${img.id}){width=200px height=200px align=center}\n`,
-                        },
-                      )
-                    }
-                    className="text-xs bg-blue-600 px-2 py-0.5 rounded hover:bg-blue-500"
-                  >
-                    ↳ insérer
-                  </button>
-                  <button
-                    onClick={() => handleRemoveImage(img.id!)}
-                    className="text-xs bg-red-600 px-2 py-0.5 rounded hover:bg-red-500"
-                  >
-                    ✕
-                  </button>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
+      {/* === Toolbar === */}
+      <NoteToolbar
+        images={images}
+        files={files}
+        allImages={allImages}
+        allFiles={allFiles}
+        onAddImage={handleAddImage}
+        onAddFile={handleAddFile}
+        onInsertText={insertAtCursor} // insertion au curseur
+        onRemoveImage={handleRemoveImage}
+        onRemoveFile={handleRemoveFile}
+      />
 
       {/* --- Pied --- */}
       <div className="flex justify-between mt-3">
@@ -192,15 +202,14 @@ export default function NoteEditor({
 
           <div className={`${activeTab === 'edit' ? 'block' : 'hidden'} md:block`}>
             <textarea
+              ref={textAreaRef}
               value={draft.content}
-              onChange={(e) =>
-                setDraft((d) => d && { ...d, content: e.target.value })
-              }
+              onChange={(e) => setDraft((d) => d && { ...d, content: e.target.value })}
               placeholder="Contenu (Markdown)..."
               rows={16}
               className="w-full p-2 bg-gray-800 rounded-lg focus:outline-none"
             />
-            {draft && extractTags(draft.content).length > 0 && (
+            {extractTags(draft.content).length > 0 && (
               <div className="mt-4 flex flex-wrap gap-2">
                 {extractTags(draft.content).map((tag) => (
                   <button
@@ -218,19 +227,34 @@ export default function NoteEditor({
 
         {/* Preview */}
         <div
-          className={`${activeTab === 'preview' ? 'block' : 'hidden'} md:block flex-1 p-3 bg-gray-800 rounded border border-gray-700 markdown-preview overflow-auto`}
+          className={`${
+            activeTab === 'preview' ? 'block' : 'hidden'
+          } md:block flex-1 p-3 bg-gray-800 rounded border border-gray-700 markdown-preview overflow-auto`}
         >
           <ReactMarkdown
             remarkPlugins={[remarkGfm, remarkAttributes]}
             rehypePlugins={[rehypeHighlight]}
             urlTransform={(src) => {
   const s = typeof src === 'string' ? src.trim() : '';
-  if (!s) return null; // <== changement ici
+  if (!s) return null;
+
   if (s.startsWith('image:')) {
     const id = s.slice('image:'.length);
-    const resolved = imageURLMap.get(id);
-    return resolved || null; // <== et ici aussi
+    return imageURLMap.get(id) || null;
   }
+
+  if (s.startsWith('file:')) {
+    const id = s.slice('file:'.length);
+    // ✅ essaie d'abord dans le mémo actif
+    let resolved = fileURLMap.get(id);
+    if (!resolved) {
+      // ✅ sinon essaie dans tous les fichiers connus
+      const found = allFiles.find((f) => String(f.id) === id);
+      if (found) resolved = URL.createObjectURL(found.data);
+    }
+    return resolved || null;
+  }
+
   return s;
 }}
 

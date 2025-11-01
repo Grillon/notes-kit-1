@@ -1,12 +1,15 @@
+// app/page.tsx
 'use client';
 import { useState, useMemo } from 'react';
 import { storage } from './lib/storage';
-import type { Note, ImageData } from './types';
+import type { Note, ImageData, FileData } from './types';
 import { extractTags, renderMarkdown } from './lib/markdown-utils';
 import { useVault } from './hooks/useVault';
 import Sidebar from './components/Sidebar';
 import NoteEditor from './components/NoteEditor';
 import { encryptVault, decryptVault, type PenContainerV1 } from './lib/crypto-pen';
+
+
 
 export default function Page() {
   const { notes, setNotes, active, setActive, draft, setDraft, search, setSearch, filtered } =
@@ -17,6 +20,8 @@ export default function Page() {
   const [activeTab, setActiveTab] = useState<'edit' | 'preview'>('edit');
   const [menuOpen, setMenuOpen] = useState(false);
   const [sidebarView, setSidebarView] = useState<'notes' | 'tags'>('notes');
+  const [files, setFiles] = useState<FileData[]>([]);
+
 
   // === CRUD notes ===
   const createNote = async () => {
@@ -95,7 +100,7 @@ export default function Page() {
     <main className="flex min-h-screen bg-gray-900 text-gray-100 overflow-hidden">
       {/* Panneau gauche */}
       <Sidebar
-        notes={filtered}
+        notes={notes}
         active={active}
         onSelect={setActive}
         onCreate={createNote}
@@ -127,6 +132,8 @@ export default function Page() {
           setSearch={setSearch}
           setImages={setImages}
           images={images}
+          files={files}
+          setFiles={setFiles}
         />
       </section>
     </main>
