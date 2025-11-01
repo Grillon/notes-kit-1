@@ -1,5 +1,5 @@
 'use client';
-import React, { useEffect, useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
@@ -9,6 +9,7 @@ import type { Note, ImageData } from '../types';
 import { storage } from '../lib/storage';
 import { remarkAttributes } from '../lib/remarkAttributes';
 import NoteToolbar from './NoteToolbar';
+import type { FileData } from '../lib/storage';
 
 type Props = {
   active: Note | null;
@@ -23,6 +24,8 @@ type Props = {
   setSearch: (s: string) => void;
   images: ImageData[];
   setImages: (imgs: ImageData[]) => void;
+  files: FileData[];
+  setFiles: (f: FileData[]) => void;
 };
 
 export default function NoteEditor({
@@ -39,14 +42,19 @@ export default function NoteEditor({
   images,
   setImages,
 }: Props) {
-  // Charger images liées
+  const [files, setFiles] = useState<FileData[]>([]);
+
+  // Charger images et fichiers liés
   useEffect(() => {
     (async () => {
       if (active?.id) {
         const imgs = await storage.listImages(active.id);
+        const fls = await storage.listFiles(active.id);
         setImages(imgs);
+        setFiles(fls);
       } else {
         setImages([]);
+        setFiles([]);
       }
     })();
   }, [active, setImages]);
@@ -60,43 +68,54 @@ export default function NoteEditor({
   }, [images]);
   useEffect(() => () => imageURLMap.forEach((u) => URL.revokeObjectURL(u)), [imageURLMap]);
 
-  // Ajout / suppression images
+  // === Gestion images ===
   const handleAddImage = async (file: File) => {
     if (!active?.id) return;
     await storage.addImage(active.id, file);
-    const imgs = await storage.listImages(active.id);
-    setImages(imgs);
+    setImages(await storage.listImages(active.id));
   };
+
   const handleRemoveImage = async (id: number) => {
     await storage.removeImage(id);
     if (active?.id) setImages(await storage.listImages(active.id));
   };
 
-  if (!draft)
-    return <div className="text-gray-500">Aucune note sélectionnée</div>;
+  // === Gestion fichiers ===
+  const handleAddFile = async (file: File) => {
+    if (!active?.id) return;
+    await storage.addFile(active.id, file);
+    setFiles(await storage.listFiles(active.id));
+  };
+
+  const handleRemoveFile = async (id: number) => {
+    await storage.removeFile(id);
+    if (active?.id) setFiles(await storage.listFiles(active.id));
+  };
+
+  if (!draft) return <div className="text-gray-500">Aucune note sélectionnée</div>;
 
   return (
     <>
-
       {/* === Titre === */}
       <input
         value={draft.title}
-        onChange={(e) =>
-          setDraft((d) => d && { ...d, title: e.target.value })
-        }
+        onChange={(e) => setDraft((d) => d && { ...d, title: e.target.value })}
         placeholder="Titre..."
         className="w-full text-2xl bg-transparent border-b border-gray-700 focus:outline-none mb-3"
       />
-<NoteToolbar
-  images={images}
-  onAddImage={handleAddImage}
-  onInsertText={(snippet) =>
-    setDraft((d) => d && { ...d, content: (d.content || '') + '\n' + snippet })
-  }
-  onRemoveImage={handleRemoveImage}
-/>
 
-
+      {/* === Toolbar avec onglets === */}
+      <NoteToolbar
+        images={images}
+        files={files}
+        onAddImage={handleAddImage}
+        onAddFile={handleAddFile}
+        onInsertText={(snippet) =>
+          setDraft((d) => d && { ...d, content: (d.content || '') + '\n' + snippet })
+        }
+        onRemoveImage={handleRemoveImage}
+        onRemoveFile={handleRemoveFile}
+      />
 
       {/* --- Pied --- */}
       <div className="flex justify-between mt-3">
@@ -149,9 +168,7 @@ export default function NoteEditor({
           <div className={`${activeTab === 'edit' ? 'block' : 'hidden'} md:block`}>
             <textarea
               value={draft.content}
-              onChange={(e) =>
-                setDraft((d) => d && { ...d, content: e.target.value })
-              }
+              onChange={(e) => setDraft((d) => d && { ...d, content: e.target.value })}
               placeholder="Contenu (Markdown)..."
               rows={16}
               className="w-full p-2 bg-gray-800 rounded-lg focus:outline-none"
@@ -174,19 +191,30 @@ export default function NoteEditor({
 
         {/* Preview */}
         <div
-          className={`${activeTab === 'preview' ? 'block' : 'hidden'} md:block flex-1 p-3 bg-gray-800 rounded border border-gray-700 markdown-preview overflow-auto`}
+          className={`${
+            activeTab === 'preview' ? 'block' : 'hidden'
+          } md:block flex-1 p-3 bg-gray-800 rounded border border-gray-700 markdown-preview overflow-auto`}
         >
           <ReactMarkdown
             remarkPlugins={[remarkGfm, remarkAttributes]}
             rehypePlugins={[rehypeHighlight]}
             urlTransform={(src) => {
   const s = typeof src === 'string' ? src.trim() : '';
-  if (!s) return null; // <== changement ici
+  if (!s) return null;
+
   if (s.startsWith('image:')) {
     const id = s.slice('image:'.length);
     const resolved = imageURLMap.get(id);
-    return resolved || null; // <== et ici aussi
+    return resolved || null;
   }
+
+  if (s.startsWith('file:')) {
+    const id = s.slice('file:'.length);
+    const file = files.find((f) => String(f.id) === id);
+    if (!file) return null;
+    return URL.createObjectURL(file.data);
+  }
+
   return s;
 }}
 
