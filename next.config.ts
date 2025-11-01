@@ -1,14 +1,15 @@
 import type { NextConfig } from "next";
 import withPWAInit from "next-pwa";
 
+const isProd = process.env.NODE_ENV === "production";
+
 const withPWA = withPWAInit({
   dest: "public",
   register: true,
   skipWaiting: true,
-  disable: process.env.NODE_ENV === "development",
+  disable: !isProd,
 
   runtimeCaching: [
-    // 🖼️ Images du dossier public
     {
       urlPattern: /^https?.*\.(png|jpg|jpeg|svg|gif|webp|ico)$/i,
       handler: "CacheFirst",
@@ -17,7 +18,6 @@ const withPWA = withPWAInit({
         expiration: { maxEntries: 100, maxAgeSeconds: 30 * 24 * 60 * 60 },
       },
     },
-    // 📦 Fichiers Next.js (JS, CSS, etc.)
     {
       urlPattern: /^https?.*\/_next\/static\/.*/i,
       handler: "CacheFirst",
@@ -26,7 +26,6 @@ const withPWA = withPWAInit({
         expiration: { maxEntries: 100, maxAgeSeconds: 30 * 24 * 60 * 60 },
       },
     },
-    // 💅 Fonts
     {
       urlPattern: /^https?.*\.(woff2?|ttf|eot)$/i,
       handler: "CacheFirst",
@@ -35,7 +34,6 @@ const withPWA = withPWAInit({
         expiration: { maxEntries: 50, maxAgeSeconds: 365 * 24 * 60 * 60 },
       },
     },
-    // 🧠 Pages HTML & API
     {
       urlPattern: /^https?.*/,
       handler: "NetworkFirst",
@@ -50,6 +48,9 @@ const withPWA = withPWAInit({
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
+  output: "export",
+  images: { unoptimized: true },
+  trailingSlash: true,
 };
 
 export default withPWA(nextConfig);
