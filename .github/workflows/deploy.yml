@@ -32,20 +32,17 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      # 🏗️ Build du site
       - name: Build static site
         run: npm run build
 
-      # 🚧 Si on est sur preprod, déplacer la build dans un sous-dossier
-      - name: Move build to preprod folder if needed
+      # 🧱 On déplace dans /preprod uniquement si la branche est preprod
+      - name: Adjust path for preprod
         run: |
           if [ "${{ github.ref_name }}" = "preprod" ]; then
             mkdir -p preprod
             mv out preprod
-            echo "✅ Déplacement effectué vers /preprod/"
           fi
 
-      # 📦 Upload pour Pages
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
@@ -54,12 +51,11 @@ jobs:
   deploy:
     needs: build
     runs-on: ubuntu-latest
-    # 🧭 Environnement dynamique : prod ou preprod
-    environment:
-      name: ${{ github.ref_name == 'main' && 'github-pages' || 'preprod' }}
-      url: ${{ steps.deployment.outputs.page_url }}
 
     steps:
-      - name: Deploy to GitHub Pages
+      - name: Deploy (branch-specific)
         id: deployment
         uses: actions/deploy-pages@v4
+        with:
+          # ⚙️ On force la correspondance environnement ↔ branche
+          env: ${{ github.ref_name == 'main' && 'github-pages' || 'preprod' }}
