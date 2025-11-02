@@ -17,6 +17,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # === BUILD COMMUN ===
   build:
     runs-on: ubuntu-latest
 
@@ -35,9 +36,10 @@ jobs:
       - name: Build static site
         run: npm run build
 
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
         with:
+          name: site-out
           path: ./out
 
   # === DEPLOY PROD ===
@@ -49,6 +51,17 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: site-out
+          path: ./out
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ./out
+
       - name: Deploy to GitHub Pages (main)
         id: deployment
         uses: actions/deploy-pages@v4
@@ -62,15 +75,23 @@ jobs:
       name: preprod
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: site-out
+          path: ./out
+
       - name: Move output to /preprod
         run: |
           mkdir -p preprod
-          mv out preprod
-          echo "Déplacement vers dossier /preprod"
-      - name: Upload artifact
+          mv out/* preprod/
+          echo "Déplacement de la build vers /preprod"
+
+      - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
           path: ./preprod
+
       - name: Deploy to GitHub Pages (preprod)
         id: deployment
         uses: actions/deploy-pages@v4
