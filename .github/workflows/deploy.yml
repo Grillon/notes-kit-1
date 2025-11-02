@@ -1,11 +1,15 @@
-name: Deploy Portable Notes (main + preprod)
+name: Deploy Portable Notes to GitHub Pages
 
 on:
   push:
     branches:
-      - main
-      - preprod
+      - main       # Déploiement auto sur main
   workflow_dispatch:
+    inputs:
+      branch:
+        description: "Branche à déployer (main ou preprod)"
+        required: false
+        default: "preprod"
 
 permissions:
   contents: read
@@ -17,13 +21,14 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # === BUILD COMMUN ===
   build:
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.branch || github.ref_name }}
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -33,65 +38,32 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Set environment variable (prod / preprod)
+        run: |
+          if [ "${{ github.event.inputs.branch || github.ref_name }}" = "preprod" ]; then
+            echo "APP_ENV=preprod" >> $GITHUB_ENV
+          else
+            echo "APP_ENV=prod" >> $GITHUB_ENV
+          fi
+
       - name: Build static site
         run: npm run build
+        env:
+          APP_ENV: ${{ env.APP_ENV }}
 
-      - name: Upload build artifact
-        uses: actions/upload-artifact@v4
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
         with:
-          name: site-out
           path: ./out
 
-  # === DEPLOY PROD ===
-  deploy_prod:
-    if: github.ref == 'refs/heads/main'
+  deploy:
     needs: build
     runs-on: ubuntu-latest
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
+
     steps:
-      - name: Download artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: site-out
-          path: ./out
-
-      - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: ./out
-
-      - name: Deploy to GitHub Pages (main)
-        id: deployment
-        uses: actions/deploy-pages@v4
-
-  # === DEPLOY PREPROD ===
-  deploy_preprod:
-    if: github.ref == 'refs/heads/preprod'
-    needs: build
-    runs-on: ubuntu-latest
-    environment:
-      name: preprod
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - name: Download artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: site-out
-          path: ./out
-
-      - name: Move output to /preprod
-        run: |
-          mkdir -p preprod
-          mv out/* preprod/
-          echo "Déplacement de la build vers /preprod"
-
-      - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: ./preprod
-
-      - name: Deploy to GitHub Pages (preprod)
+      - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
