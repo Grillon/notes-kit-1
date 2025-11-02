@@ -73,7 +73,7 @@ export default function Sidebar({
       {/* === Sidebar === */}
       <aside
         className={`
-          fixed md:static inset-y-0 left-0 z-10
+          fixed md:static inset-y-0 left-0 z-20
           w-72 bg-gray-900 border-r border-gray-800 p-3 space-y-2
           transform transition-transform duration-300
           ${menuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
