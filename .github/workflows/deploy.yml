@@ -4,7 +4,7 @@ on:
   push:
     branches:
       - main
-      - preprod  # ⬅️ ajoute la branche de préprod
+      - preprod
   workflow_dispatch:
 
 permissions:
@@ -19,6 +19,7 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -31,17 +32,20 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # 🏗️ Build du site
       - name: Build static site
         run: npm run build
 
-      - name: Move build to subdir if preprod
+      # 🚧 Si on est sur preprod, déplacer la build dans un sous-dossier
+      - name: Move build to preprod folder if needed
         run: |
           if [ "${{ github.ref_name }}" = "preprod" ]; then
             mkdir -p preprod
             mv out preprod
-            echo "➡️ Deployed build will go to /preprod/"
+            echo "✅ Déplacement effectué vers /preprod/"
           fi
 
+      # 📦 Upload pour Pages
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
@@ -50,9 +54,11 @@ jobs:
   deploy:
     needs: build
     runs-on: ubuntu-latest
+    # 🧭 Environnement dynamique : prod ou preprod
     environment:
-      name: github-pages
+      name: ${{ github.ref_name == 'main' && 'github-pages' || 'preprod' }}
       url: ${{ steps.deployment.outputs.page_url }}
+
     steps:
       - name: Deploy to GitHub Pages
         id: deployment
