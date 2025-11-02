@@ -1,9 +1,10 @@
-name: Deploy Portable Notes to GitHub Pages
+name: Deploy Portable Notes (prod + preprod)
 
 on:
   push:
     branches:
       - main
+      - preprod  # ⬅️ ajoute la branche de préprod
   workflow_dispatch:
 
 permissions:
@@ -18,7 +19,6 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -34,10 +34,18 @@ jobs:
       - name: Build static site
         run: npm run build
 
+      - name: Move build to subdir if preprod
+        run: |
+          if [ "${{ github.ref_name }}" = "preprod" ]; then
+            mkdir -p preprod
+            mv out preprod
+            echo "➡️ Deployed build will go to /preprod/"
+          fi
+
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: ./out
+          path: ./
 
   deploy:
     needs: build
@@ -49,4 +57,3 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
-
