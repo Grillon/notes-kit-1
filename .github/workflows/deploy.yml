@@ -35,12 +35,13 @@ jobs:
       - name: Build static site
         run: npm run build
 
-      # 🧱 On déplace dans /preprod uniquement si la branche est preprod
+      # 🧱 On déplace la build si c’est la préprod
       - name: Adjust path for preprod
         run: |
           if [ "${{ github.ref_name }}" = "preprod" ]; then
             mkdir -p preprod
             mv out preprod
+            echo "Déplacement de la build vers /preprod"
           fi
 
       - name: Upload artifact
@@ -52,10 +53,12 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
 
+    # ✅ C’est ce bloc qui manquait
+    environment:
+      name: ${{ github.ref_name == 'main' && 'github-pages' || 'preprod' }}
+      url: ${{ steps.deployment.outputs.page_url }}
+
     steps:
-      - name: Deploy (branch-specific)
+      - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
-        with:
-          # ⚙️ On force la correspondance environnement ↔ branche
-          env: ${{ github.ref_name == 'main' && 'github-pages' || 'preprod' }}
