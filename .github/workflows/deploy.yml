@@ -1,4 +1,4 @@
-name: Deploy Portable Notes (prod + preprod)
+name: Deploy Portable Notes (main + preprod)
 
 on:
   push:
@@ -35,30 +35,42 @@ jobs:
       - name: Build static site
         run: npm run build
 
-      # 🧱 On déplace la build si c’est la préprod
-      - name: Adjust path for preprod
-        run: |
-          if [ "${{ github.ref_name }}" = "preprod" ]; then
-            mkdir -p preprod
-            mv out preprod
-            echo "Déplacement de la build vers /preprod"
-          fi
-
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: ./
+          path: ./out
 
-  deploy:
+  # === DEPLOY PROD ===
+  deploy_prod:
+    if: github.ref == 'refs/heads/main'
     needs: build
     runs-on: ubuntu-latest
-
-    # ✅ C’est ce bloc qui manquait
     environment:
-      name: ${{ github.ref_name == 'main' && 'github-pages' || 'preprod' }}
+      name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
-
     steps:
-      - name: Deploy to GitHub Pages
+      - name: Deploy to GitHub Pages (main)
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+  # === DEPLOY PREPROD ===
+  deploy_preprod:
+    if: github.ref == 'refs/heads/preprod'
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: preprod
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Move output to /preprod
+        run: |
+          mkdir -p preprod
+          mv out preprod
+          echo "Déplacement vers dossier /preprod"
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ./preprod
+      - name: Deploy to GitHub Pages (preprod)
         id: deployment
         uses: actions/deploy-pages@v4
